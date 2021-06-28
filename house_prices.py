@@ -43,7 +43,7 @@ def learn_with_sklearn(X, y):
 
 
 def predict_test_houses(pipeline, estimator):
-    test_houses = pd.read_csv("house_prices/test.csv")
+    test_houses = pd.read_csv("data/house_prices/test.csv")
 
     test_ids = pd.DataFrame(test_houses["Id"]).set_index("Id")
 
@@ -56,7 +56,7 @@ def predict_test_houses(pipeline, estimator):
 
     test_ids["SalePrice"] = y_real_pred
 
-    test_ids.to_csv("house_prices/predictions.csv")
+    test_ids.to_csv("data/house_prices/predictions.csv")
 
 
 def prepare_pipeline():
@@ -220,7 +220,7 @@ def plot_learning_curves(X_train, y_train, X_test, y_test):
 
 
 if __name__ == "__main__":
-    houses = pd.read_csv("house_prices/train.csv")
+    houses = pd.read_csv("data/house_prices/train.csv")
 
     prices = houses["SalePrice"]
 
@@ -250,8 +250,6 @@ if __name__ == "__main__":
 
     y_train = train_prices.to_numpy().reshape((-1, 1))
     X_train = train_transformed
-    poly_f = PolynomialFeatures(degree=2, include_bias=False)
-    poly_f.fit()
     # X_train = np.hstack((np.ones((X.shape[0], 1)), X_train))
 
     # theta_scipy = learn_manually_with_scipy(X_train, y_train, 1)
@@ -279,5 +277,7 @@ if __name__ == "__main__":
         f"training set RMSE from learning with sklearn is {mean_squared_error(y_train, best_estimator.predict(X_train), squared=False)}")
     print(
         f"test set RMSE from learning with sklearn is {mean_squared_error(y_test, best_estimator.predict(X_test), squared=False)}")
+
+    best_estimator.fit(full_pipeline.transform(houses), prices)
 
     predict_test_houses(full_pipeline, best_estimator)
