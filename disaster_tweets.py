@@ -11,7 +11,9 @@ from sklearn.pipeline import make_pipeline
 from sklearn.compose import make_column_transformer
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import OneHotEncoder, PolynomialFeatures
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 class TextPreprocessor(TransformerMixin):
@@ -43,27 +45,52 @@ class TextPreprocessor(TransformerMixin):
         return stemmed_words
 
 
-def svm_test(X, y):
-    clf = SVC()
-    clf.fit(X, y)
-    y_predicted = clf.predict(X)
-    print(accuracy_score(y, y_predicted))
-
-    scores = cross_val_score(clf, X, y, cv=5)
-    print(scores.mean())
+def svm_grid_search(X, y):
+    param_grid = {"C": [0.1, 0.3, 1, 3, 10], "kernel": ["linear", "poly", "rbf"]}
+    return find_best_estimator(GridSearchCV(SVC(), param_grid, cv=3), X, y)
 
 
-def logistic_regression_grid_search(X, y):
+def svm_rbf_grid_search(X, y):
+    param_grid = {"C": [2.5, 2.8, 3, 3.2, 3.5], "gamma": [0.05, 0.08, 0.1, 0.12, 0.15, 0.2]}
+    # best estimator is SVC(C=2.8, gamma=0.05) with score 0.8052545155993432
+    return find_best_estimator(GridSearchCV(SVC(kernel="rbf"), param_grid, cv=3), X, y)
+
+
+def logistic_regression_grid_search(X, y, count_vectorizer_feature_names):
     # poly_features = PolynomialFeatures(degree=2, include_bias=False, interaction_only=True)
     # X = poly_features.fit_transform(X)
     grid_search = GridSearchCV(LogisticRegression(max_iter=1000), {"C": [0.1, 0.3, 0.7, 1, 3, 7, 10], "solver": ["newton-cg", "liblinear", "lbfgs"]}, cv=3)
-    print("Running logistic regression grid search...")
+    clf = find_best_estimator(grid_search, X, y)
+    sorted_coef_inidces = np.argsort(clf.coef_).reshape((-1))
+    print_most_significant_words(count_vectorizer_feature_names, sorted_coef_inidces[-1:-32:-1], sorted_coef_inidces[:20])
+    return clf
+
+
+def find_best_estimator(grid_search, X, y):
+    print(f"Running grid search:\n{grid_search}")
     grid_search.fit(X, y)
     print(f"best estimator is {grid_search.best_estimator_} with score {grid_search.best_score_}")
-    sorted_coef_inidces = np.argsort(grid_search.best_estimator_.coef_).reshape((-1))
-    print(f"top indices{sorted_coef_inidces[-1:-21:-1]}")
-    print(f"flop indices{sorted_coef_inidces[:20]}")
-    return grid_search.best_estimator_, sorted_coef_inidces[-1:-32:-1], sorted_coef_inidces[:20]
+    return grid_search.best_estimator_
+
+
+def print_most_significant_words(count_vectorizer_feature_names, top_indices, flop_indices):
+    print(f"top indices {top_indices}")
+    print(f"flop indices {flop_indices}")
+    print(f"Top words:{[count_vectorizer_feature_names[idx] for idx in top_indices if idx < len(count_vectorizer_feature_names)]}")
+    print(f"Flop words:{[count_vectorizer_feature_names[idx] for idx in flop_indices if idx < len(count_vectorizer_feature_names)]}")
+
+
+def knn_grid_search(X, y):
+    param_grid = {"n_neighbors": [1, 2, 3, 4, 5, 10, 15, 20], "weights": ["uniform", "distance"]}
+    grid_search = GridSearchCV(KNeighborsClassifier(), param_grid, cv=3)
+    return find_best_estimator(grid_search, X, y)
+
+
+def nn_grid_search(X, y):
+    param_grid = {"hidden_layer_sizes": [(5, 5, 5), (3, 5, 2), (10, 10)], "activation": ["logistic", "relu"]}
+    # best estimator is MLPClassifier(activation='logistic', hidden_layer_sizes=(3, 5, 2),
+    #               max_iter=1000) with score 0.7712643678160919
+    return find_best_estimator(GridSearchCV(MLPClassifier(max_iter=1000), param_grid, cv=3), X, y)
 
 
 def predict_test(clf, transformer):
@@ -92,13 +119,17 @@ if __name__ == "__main__":
 
     X_train = transformer.fit_transform(tweets_train)#.toarray()
 
-    clf, top_indices, flop_indices = logistic_regression_grid_search(X_train, y_train)
-
     count_vectorizer = transformer.named_transformers_.pipeline.steps[1][1]
     count_vectorizer_feature_names = count_vectorizer.get_feature_names()
 
-    print(f"Top words:{[count_vectorizer_feature_names[idx] for idx in top_indices if idx < len(count_vectorizer_feature_names)]}")
-    print(f"Flop words:{[count_vectorizer_feature_names[idx] for idx in flop_indices if idx < len(count_vectorizer_feature_names)]}")
+    # clf = logistic_regression_grid_search(X_train, y_train, count_vectorizer_feature_names)
+    # clf = knn_grid_search(X_train, y_train)
+    # clf = nn_grid_search(X_train, y_train)
+    clf = svm_rbf_grid_search(X_train, y_train)
+
+
+
+
 
     y_test_predicted = clf.predict(transformer.transform(tweets_test))
     print(f"test accuracy: {accuracy_score(y_test, y_test_predicted)}")
