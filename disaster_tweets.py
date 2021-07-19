@@ -1,16 +1,19 @@
 import re
 
+import matplotlib.pyplot as plt
 import numpy as np
 from nltk.stem import PorterStemmer
+from nltk.stem import WordNetLemmatizer
+from nltk.stem.snowball import EnglishStemmer
 import pandas as pd
-from sklearn.base import TransformerMixin
-from sklearn.model_selection import StratifiedShuffleSplit, cross_val_score, GridSearchCV
+from sklearn.base import TransformerMixin, clone
+from sklearn.model_selection import StratifiedShuffleSplit, cross_val_score, GridSearchCV, cross_val_predict
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.pipeline import make_pipeline
 from sklearn.compose import make_column_transformer
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_curve, f1_score, precision_score, recall_score, plot_precision_recall_curve
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -40,9 +43,10 @@ class TextPreprocessor(TransformerMixin):
             word_chars_only = re.sub("[^a-z]", "", word)
             if word_chars_only != "":
                 words.append(word_chars_only)
-        stemmer = PorterStemmer()
-        stemmed_words = [stemmer.stem(word) for word in words]
-        return stemmed_words
+        # lemmatizer = WordNetLemmatizer()
+        # return [lemmatizer.lemmatize(word) for word in words]
+        stemmer = EnglishStemmer()
+        return [stemmer.stem(word) for word in words]
 
 
 def svm_grid_search(X, y):
@@ -93,12 +97,52 @@ def nn_grid_search(X, y):
     return find_best_estimator(GridSearchCV(MLPClassifier(max_iter=1000), param_grid, cv=3), X, y)
 
 
-def predict_test(clf, transformer):
+def predict_test(clf, transformer, threshold=None):
     tweets = pd.read_csv("data/disaster_tweets/test.csv")
-    predictions = clf.predict(transformer.transform(tweets))
+    X = transformer.transform(tweets)
+    if threshold is None:
+        predictions = clf.predict(X)
+    else:
+        predictions = (clf.decision_function(X) > threshold).astype(np.int32)
     submission = pd.concat({"id": tweets["id"], "target": pd.Series(predictions)}, axis=1)
     submission.set_index("id")
     submission.to_csv("data/disaster_tweets/submission.csv", index=False)
+
+
+def analyse_errors(clf, X, y):
+    y_pred = clf.predict(X)
+    conf_mx = confusion_matrix(y, y_pred)
+    print(conf_mx)
+    print(f"accuracy {accuracy_score(y, y_pred)}, precision {precision_score(y, y_pred)}, recall {recall_score(y, y_pred)}, f1 {f1_score(y, y_pred)}")
+    precisions, recall, thresholds = precision_recall_curve(y, y_pred)
+
+
+def analyse_errors_cross_val(clf, X, y):
+    y_pred = cross_val_predict(clf, X, y, cv=3)
+    conf_mx = confusion_matrix(y, y_pred)
+    print(conf_mx)
+    print(
+        f"accuracy {accuracy_score(y, y_pred)}, precision {precision_score(y, y_pred)}, recall {recall_score(y, y_pred)}, f1 {f1_score(y, y_pred)}")
+    y_scores = cross_val_predict(clf, X, y, cv=3, method="decision_function")
+    precisions, recalls, thresholds = precision_recall_curve(y, y_scores)
+    plt.plot(thresholds, precisions[:-1], label="precision")
+    plt.plot(thresholds, recalls[:-1], label="recall")
+    plt.legend()
+    plt.show()
+
+    # plot_precision_recall_curve(clf, X, y)
+    # plt.show()
+
+
+def find_best_threshold(clf, X, y):
+    # y_scores = clf.decision_function(X)
+    y_scores = cross_val_predict(clf, X, y, cv=3, method="decision_function")
+    precisions, recalls, thresholds = precision_recall_curve(y, y_scores)
+    f1_scores = 2 * precisions * recalls / (precisions + recalls)
+    best_f1_score_idx = np.argmax(f1_scores)
+    print(
+        f"Best threshold {thresholds[best_f1_score_idx]} - precision {precisions[best_f1_score_idx]}, recall {recalls[best_f1_score_idx]}")
+    return thresholds[best_f1_score_idx]
 
 
 if __name__ == "__main__":
@@ -118,6 +162,7 @@ if __name__ == "__main__":
     )
 
     X_train = transformer.fit_transform(tweets_train)#.toarray()
+    X_test = transformer.transform(tweets_test)
 
     count_vectorizer = transformer.named_transformers_.pipeline.steps[1][1]
     count_vectorizer_feature_names = count_vectorizer.get_feature_names()
@@ -125,19 +170,28 @@ if __name__ == "__main__":
     # clf = logistic_regression_grid_search(X_train, y_train, count_vectorizer_feature_names)
     # clf = knn_grid_search(X_train, y_train)
     # clf = nn_grid_search(X_train, y_train)
-    clf = svm_rbf_grid_search(X_train, y_train)
+    # clf = svm_rbf_grid_search(X_train, y_train)
+    clf = SVC(C=2.5, gamma=0.05)
+    clf.fit(X_train, y_train)
+
+    # analyse_errors_cross_val(clf, X_train, y_train)
 
 
-
-
-
-    y_test_predicted = clf.predict(transformer.transform(tweets_test))
+    y_test_predicted = clf.predict(X_test)
     print(f"test accuracy: {accuracy_score(y_test, y_test_predicted)}")
 
-    # refit with whole training set
-    clf.fit(transformer.fit_transform(tweets), target)
+    y_test_threshold_predicted = clf.decision_function(X_test) > find_best_threshold(clf, X_train, y_train)
+    print(f"test accuracy with best threshold: {accuracy_score(y_test, y_test_threshold_predicted)}")
 
-    predict_test(clf, transformer)
+    # refit with whole training set
+    X = transformer.fit_transform(tweets)
+    y = target
+    clf.fit(X, y)
+
+    best_threshold = find_best_threshold(clf, X, y)
+    print(f"Best threshold for whole train set: {best_threshold}")
+
+    predict_test(clf, transformer, best_threshold)
 
 
 
