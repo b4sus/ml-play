@@ -44,12 +44,12 @@ if __name__ == "__main__":
     X_test = mnist.data.iloc[test_idx]
     y_test = mnist.target.iloc[test_idx]
 
-    svc_clf = SVC(max_iter=100, probability=True, random_state=random_state)
+    # svc_clf = SVC(max_iter=100, probability=True, random_state=random_state)
     linear_svc_clf = LinearSVC(max_iter=100, random_state=random_state)
     rf_clf = RandomForestClassifier(random_state=random_state)
     lr_clf = LogisticRegression(random_state=random_state)
     extra_tree_clf = ExtraTreeClassifier(random_state=random_state)
-    classifiers = [svc_clf, linear_svc_clf, rf_clf, lr_clf, extra_tree_clf]
+    classifiers = [linear_svc_clf, rf_clf, lr_clf, extra_tree_clf]
 
     for clf in classifiers:
         print(f"Training {clf}")
@@ -58,14 +58,17 @@ if __name__ == "__main__":
     print(f"Classifiers:{classifiers}")
     print(f"Scores: {[clf.score(X_cv, y_cv) for clf in classifiers]}")
 
-    named_estimators = [("svc", svc_clf), ("random_forrest", rf_clf), ("logistic_regression", lr_clf),
+    named_estimators = [("random_forrest", rf_clf), ("logistic_regression", lr_clf),
                         ("extra_tree", extra_tree_clf)]
-    hard_voting_clf = VotingClassifier(named_estimators, voting="hard")
-    hard_voting_clf.fit(X_train, y_train)
-    soft_voting_clf = VotingClassifier(named_estimators, voting="soft")
-    soft_voting_clf.fit(X_train, y_train)
+    voting_clf = VotingClassifier(named_estimators)
+    voting_clf.fit(X_train, y_train)
 
-    print(f"hard voting classifier score: {hard_voting_clf.score(X_cv, y_cv)}")
-    print(f"Scores: {[clf.score(X_cv, y_cv) for clf in hard_voting_clf.estimators_]}")
-    print(f"soft voting classifier score: {soft_voting_clf.score(X_cv, y_cv)}")
-    print(f"Scores: {[clf.score(X_cv, y_cv) for clf in soft_voting_clf.estimators_]}")
+    print(f"hard voting classifier score: {voting_clf.score(X_cv, y_cv)}")
+    print(voting_clf.estimators_)
+    print(dir(voting_clf))
+    print(f"Scores: {[clf.score(X_cv, y_cv) for clf in voting_clf.estimators_]}")
+
+    voting_clf.voting = "soft"
+
+    print(f"soft voting classifier score: {voting_clf.score(X_cv, y_cv)}")
+    print(f"Scores: {[clf.score(X_cv, y_cv) for clf in voting_clf.estimators_]}")
