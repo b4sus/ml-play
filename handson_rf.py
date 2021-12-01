@@ -58,9 +58,10 @@ if __name__ == "__main__":
     print(f"Classifiers:{classifiers}")
     print(f"Scores: {[clf.score(X_cv, y_cv) for clf in classifiers]}")
 
-    named_estimators = [("random_forrest", rf_clf), ("logistic_regression", lr_clf),
+    named_estimators = [("random_forest", rf_clf), ("logistic_regression", lr_clf),
                         ("extra_tree", extra_tree_clf)]
     voting_clf = VotingClassifier(named_estimators)
+
     voting_clf.fit(X_train, y_train)
 
     print(f"hard voting classifier score: {voting_clf.score(X_cv, y_cv)}")
