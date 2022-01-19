@@ -10,19 +10,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.tree import ExtraTreeClassifier
 from sklearn.metrics import accuracy_score
 
-
-def open_mnist_or_download_if_missing():
-    if os.path.exists("data/mnist/mnist.pickle"):
-        print("Using local mnist")
-        with open("data/mnist/mnist.pickle", mode="rb") as fp:
-            mnist = pickle.load(fp)
-    else:
-        print("Downloading mnist")
-        mnist = fetch_openml("mnist_784", version=1)
-        with open("data/mnist/mnist.pickle", mode="wb") as fp:
-            pickle.dump(mnist, fp)
-    mnist.target = mnist.target.astype(np.uint8)
-    return mnist
+from utils import open_mnist_or_download_if_missing
 
 
 if __name__ == "__main__":
