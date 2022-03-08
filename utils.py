@@ -2,6 +2,7 @@ import os
 import pickle
 
 import numpy as np
+import pandas as pd
 from sklearn.datasets import fetch_openml
 from sklearn.model_selection import StratifiedShuffleSplit
 
@@ -21,12 +22,15 @@ def open_mnist_or_download_if_missing():
 
 
 def shuffle_split(X, y, train_size, random_state=None):
+    if isinstance(X, pd.DataFrame):
+        X = X.iloc
+        y = y.iloc
     for train_idx, test_idx in StratifiedShuffleSplit(n_splits=1, train_size=train_size,
                                                       random_state=random_state).split(X, y):
-        X_train = X.iloc[train_idx, :]
-        X_test = X.iloc[test_idx, :]
-        y_train = y.iloc[train_idx]
-        y_test = y.iloc[test_idx]
+        X_train = X[train_idx, :]
+        X_test = X[test_idx, :]
+        y_train = y[train_idx]
+        y_test = y[test_idx]
 
     return X_train, y_train, X_test, y_test
 
